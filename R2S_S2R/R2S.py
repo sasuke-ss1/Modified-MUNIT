@@ -20,7 +20,8 @@ from TVLoss.L1_TVLoss import L1_TVLoss_Charbonnier
 class SUnderwaterRecon(BaseModel):
     
     def initialize(self, opt):
-        
+        BaseModel.initialize(self, opt)
+
         self.R2S = networks.define_G()
         self.S2R = networks.define_G()
         self.s_recon = networks.define_Gen()

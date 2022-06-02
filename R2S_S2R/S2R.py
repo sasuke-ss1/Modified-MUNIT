@@ -21,6 +21,8 @@ class RUnderwaterRecon(BaseModel):
         self.Train = train
     
     def initialize(self):
+        BaseModel.initialize(self, opt)
+
         self.S2R = networks.define_G()
         self.R_recon = networks.define_Gen()
         self.Dis = networks.define_D()
@@ -55,7 +57,7 @@ class RUnderwaterRecon(BaseModel):
         
     def forward(self):
         if self.Train:
-            self.img_s2r = self.S2R(self.syn_img).detach()
+            self.img_s2r = self.S2R(self.syn_img, style = None).detach()
             self.out = self.R_recon(torch.cat(self.img_s2r, self.real_img))
             self.s2r_recon = self.out[-1].narrow(0,0,self.num)
             self.r_recon = self.out[-1].narrow(0, self.num, self.num)
