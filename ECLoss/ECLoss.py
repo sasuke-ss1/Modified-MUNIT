@@ -29,6 +29,7 @@ def BCLoss(img, patch_size):
     calculating bright channel of image, the image shape is of N*C*W*H
     """
     patch_size = 35
+    maxpool = nn.MaxPool3d((3, patch_size, patch_size), stride=1, padding=(0, patch_size//2, patch_size//2))
     dc = maxpool(img[:, None, :, :, :])
     
     target = Variable(torch.FloatTensor(dc.shape).zero_().cuda()+1) 
