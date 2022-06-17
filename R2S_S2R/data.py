@@ -2,7 +2,7 @@ from PIL import Image
 from torch.utils.data import Dataset, DataLoader
 import glob
 import os
-path_r = "";path_f = ""
+path_r = "/home/neham/uw_datasets/trainA";path_f = "home/neham/uw_datasets/UWCNN_NYU"
 
 class RealData(Dataset):
     def __init__(self, path, transform = None):
@@ -22,8 +22,8 @@ class RealData(Dataset):
         return image
 
 class FakeData(Dataset):
-    def __init__(self, path, transform = None):
-        self.path = path
+    def __init__(self, path, type, transform = None):
+        self.path = os.path.join(path, f"type{type}_data/underwater_type_{type}")
         self.transform = transform
         self.image_paths = glob.glob(os.path.join(path, "*"))
 
