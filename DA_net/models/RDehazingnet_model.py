@@ -60,7 +60,7 @@ class RDehazingnetModel(BaseModel):
 
 		use_parallel = False
 		trainer= networks.define_G(opt.input_nc, opt.output_nc, opt.ngf,
-										opt.which_model_netG_A, opt.norm, not opt.no_dropout, self.gpu_ids, use_parallel,
+										"munit", opt.norm, not opt.no_dropout, self.gpu_ids, use_parallel,
 										opt.learn_residual)
 
 		self.netR_Dehazing = networks.define_Gen(opt.input_nc, opt.output_nc, opt.ngf, opt.task_layers, opt.norm,
@@ -72,7 +72,7 @@ class RDehazingnetModel(BaseModel):
 											opt.which_model_netD,
 											opt.n_layers_D, opt.norm, use_sigmoid, self.gpu_ids, use_parallel)
 		if self.isTrain:
-			state_dict = torch.load(opt.chekpoint)	
+			state_dict = torch.load(opt.checkpoint)	
 			trainer.gen_a.load_state_dict(state_dict['a'])
 			trainer.gen_b.load_state_dict(state_dict['b'])
 			trainer.cuda()

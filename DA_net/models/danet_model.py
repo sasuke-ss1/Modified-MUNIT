@@ -15,7 +15,7 @@ from ECLoss.ECLoss import BCLoss, DCLoss
 from TVLoss.TVLossL1 import TVLossL1
 from TVLoss.L1_TVLoss import L1_TVLoss_Charbonnier
 from . import losses
-
+from MUNIT.utils import get_config
 try:
 	xrange  # Python2
 except NameError:
@@ -72,7 +72,7 @@ class DAnetmodel(BaseModel):
 		if self.isTrain:
 			self.loss_names = ['S2R_Dehazing', 'S_Dehazing', 'R2S_Dehazing_DC', 'R_Dehazing_DC']
 			self.loss_names +=['R2S_Dehazing_TV', 'R_Dehazing_TV', 'Dehazing_Con']
-			self.loss_names +=['idt_R', 'idt_S', 'D_R', 'D_S', 'G_S2R', 'G_R2S', 'cycle_S', 'cycle_R', 'G_Rfeat', 'G_Sfeat', 'D_Rfeat', 'D_Sfeat']
+			self.loss_names +=['G_Rfeat', 'G_Sfeat', 'D_Rfeat', 'D_Sfeat']
 
 		# specify the images you want to save/display. The program will call base_model.get_current_visuals
 		if self.isTrain:
@@ -88,7 +88,7 @@ class DAnetmodel(BaseModel):
 		# specify the models you want to save to the disk. The program will call base_model.save_networks and base_model.load_networks
 		if self.isTrain:
 			self.model_names = ['S_Dehazing', 'R_Dehazing']
-			self.model_names += ['S2R', 'R2S', 'D_R', 'D_S', 'D_Sfeat', 'D_Rfeat']
+			self.model_names += ['D_Sfeat', 'D_Rfeat']
 		else:
 			self.model_names = ['S_Dehazing', 'R_Dehzaing', 'S2R', 'R2S']
 
@@ -96,8 +96,8 @@ class DAnetmodel(BaseModel):
 		# use_parallel = not opt.gan_type == 'wgan-gp'
 		use_parallel = False
 		# define the transform network
-		trainer = networks.define_G(opt.input_nc, opt.output_nc, opt.ngf,
-										 opt.which_model_netG_A, opt.norm, not opt.no_dropout, self.gpu_ids, use_parallel,
+		self.trainer = networks.define_G(opt.input_nc, opt.output_nc, opt.ngf,
+										 "munit", opt.norm, not opt.no_dropout, self.gpu_ids, use_parallel,
 										 opt.learn_residual)
 
 
@@ -114,13 +114,13 @@ class DAnetmodel(BaseModel):
 		if self.isTrain:
 			use_sigmoid = False
 
-			self.netD_R = networks.define_D(opt.input_nc, opt.ndf,
-											   opt.which_model_netD,
-											   opt.n_layers_D, opt.norm, use_sigmoid, self.gpu_ids, use_parallel)
-
-			self.netD_S = networks.define_D(opt.input_nc, opt.ndf,
-										opt.which_model_netD,
-										opt.n_layers_D, opt.norm, use_sigmoid, self.gpu_ids, use_parallel)
+#			self.netD_R = networks.define_D(opt.input_nc, opt.ndf,
+#											   opt.which_model_netD,
+#											   opt.n_layers_D, opt.norm, use_sigmoid, self.gpu_ids, use_parallel)
+#
+#			self.netD_S = networks.define_D(opt.input_nc, opt.ndf,
+#										opt.which_model_netD,
+#										opt.n_layers_D, opt.norm, use_sigmoid, self.gpu_ids, use_parallel)
 
 
 			self.netD_Sfeat = networks.define_featureD(opt.image_feature, n_layers=2, norm='batch', activation='PReLU',
@@ -130,18 +130,18 @@ class DAnetmodel(BaseModel):
 													   init_type='xavier', gpu_ids=self.gpu_ids)
 		if self.isTrain and not opt.continue_train:
 
-			state_dict = torch.load(opt.chekpoint)	
-			trainer.gen_a.load_state_dict(state_dict['a'])
-			trainer.gen_b.load_state_dict(state_dict['b'])
-			trainer.cuda()
-			self.S_encoder = trainer.gen_b.encode
-			self.S_decoder = trainer.gen_b.decode
-			self.R_encoder = trainer.gen_a.encode
-			self.R_decoder = trainer.gen_a.decode
+			state_dict = torch.load(opt.checkpoint)	
+			self.trainer.gen_a.load_state_dict(state_dict['a'])
+			self.trainer.gen_b.load_state_dict(state_dict['b'])
+			self.trainer.cuda()
+			self.S_encoder = self.trainer.gen_b.encode
+			self.S_decoder = self.trainer.gen_b.decode
+			self.R_encoder = self.trainer.gen_a.encode
+			self.R_decoder = self.trainer.gen_a.decode
 			self.init_with_pretrained_model('R_Dehazing', self.opt.R_Dehazing_premodel)
 			self.init_with_pretrained_model('S_Dehazing', self.opt.S_Dehazing_premodel)
-			self.init_with_pretrained_model('D_R', self.opt.d_r_premodel)
-			self.init_with_pretrained_model('D_S', self.opt.d_s_premodel)
+			#self.init_with_pretrained_model('D_R', self.opt.d_r_premodel)
+			#self.init_with_pretrained_model('D_S', self.opt.d_s_premodel)
 
 		if opt.continue_train:
 			self.load_networks(opt.which_epoch)
@@ -153,8 +153,8 @@ class DAnetmodel(BaseModel):
 			# define loss functions
 			self.criterionGAN = losses.GANLoss(use_ls=not opt.no_lsgan).to(self.device)
 			self.l1loss = torch.nn.L1Loss()
-			self.criterionCycle = torch.nn.L1Loss()
-			self.criterionIdt = torch.nn.L1Loss()
+			#self.criterionCycle = torch.nn.L1Loss()
+			#self.criterionIdt = torch.nn.L1Loss()
 			self.criterionDehazing = torch.nn.MSELoss()
 			self.criterionCons = torch.nn.L1Loss()
 			self.nonlinearity = torch.nn.ReLU()
@@ -163,24 +163,23 @@ class DAnetmodel(BaseModel):
 			self.optimizer_G_task = torch.optim.Adam(itertools.chain(self.netS_Dehazing.parameters(),
 																	 self.netR_Dehazing.parameters()),
 													 lr=opt.lr_task, betas=(0.95, 0.999))
-			self.optimizer_G_trans = torch.optim.Adam(itertools.chain(self.netS2R.parameters(),
-																	  self.netR2S.parameters()),
-													  lr=opt.lr_trans, betas=(0.5, 0.9))
-			self.optimizer_D = torch.optim.Adam(itertools.chain(self.netD_S.parameters(),
-																self.netD_R.parameters(),
+			#self.optimizer_G_trans = torch.optim.Adam(itertools.chain(self.netS2R.parameters(),
+			#														  self.netR2S.parameters()),
+			#										  lr=opt.lr_trans, betas=(0.5, 0.9))
+			self.optimizer_D = torch.optim.Adam(itertools.chain(
 																self.netD_Sfeat.parameters(),
 																self.netD_Rfeat.parameters()),
 												lr=opt.lr_trans, betas=(0.5, 0.9))
 			self.optimizers = []
 			self.optimizers.append(self.optimizer_G_task)
-			self.optimizers.append(self.optimizer_G_trans)
+			#self.optimizers.append(self.optimizer_G_trans)
 			self.optimizers.append(self.optimizer_D)
 			if opt.freeze_bn:
 				self.netS_Dehazing.apply(networks.freeze_bn)
 				self.netR_Dehazing.apply(networks.freeze_bn)
-			if opt.freeze_in:
-				self.netS2R.apply(networks.freeze_in)
-				self.netR2S.apply(networks.freeze_in)
+			#if opt.freeze_in:
+			#	self.netS2R.apply(networks.freeze_in)
+			#	self.netR2S.apply(networks.freeze_in)
 
 
 
@@ -235,13 +234,13 @@ class DAnetmodel(BaseModel):
 		loss_D.backward()
 		return loss_D
 
-	def backward_D_S(self):
-		img_r2s = self.fake_s_pool.query(self.img_r2s)
-		self.loss_D_S = self.backward_D_basic(self.netD_S, self.syn_haze_img, img_r2s)
-
-	def backward_D_R(self):
-		img_s2r = self.fake_r_pool.query(self.img_s2r)
-		self.loss_D_R = self.backward_D_basic(self.netD_R, self.real_haze_img, img_s2r)
+	#def backward_D_S(self):
+	#	img_r2s = self.fake_s_pool.query(self.img_r2s)
+	#	self.loss_D_S = self.backward_D_basic(self.netD_S, self.syn_haze_img, img_r2s)
+#
+	#def backward_D_R(self):
+	#	img_s2r = self.fake_r_pool.query(self.img_s2r)
+	#	self.loss_D_R = self.backward_D_basic(self.netD_R, self.real_haze_img, img_s2r)
 
 	def backward_D_Sfeat(self):
 
@@ -264,19 +263,23 @@ class DAnetmodel(BaseModel):
 		lambda_R = self.opt.lambda_R
 
 		# =========================== synthetic ==========================
-		self.img_s2r = self.netS2R(self.syn_haze_img, self.depth, True)
-		self.idt_S = self.netR2S(self.syn_haze_img, self.depth, True)
-		self.s_rec_img = self.netR2S(self.img_s2r, self.depth, True)
+		Fcon, Fsty = self.S_encoder(self.syn_haze_img)
+		Rcon, Rsty = self.R_encoder(self.real_haze_img)
+
+
+		self.img_s2r = self.R_decoder(Fcon, Rsty)
+		#self.idt_S = self.netR2S(self.syn_haze_img, self.depth, True)
+		#self.s_rec_img = self.netR2S(self.img_s2r, self.depth, True)
 		self.out_r = self.netR_Dehazing(self.img_s2r)
 		self.out_s = self.netS_Dehazing(self.syn_haze_img)
 		self.s2r_dehazing_feat = self.out_r[0]
 		self.s_dehazing_feat = self.out_s[0]
 		self.s2r_dehazing_img = self.out_r[-1]
 		self.s_dehazing_img = self.out_s[-1]
-		self.loss_G_S2R = self.criterionGAN(self.netD_R(self.img_s2r), True)
+		#self.loss_G_S2R = self.criterionGAN(self.netD_R(self.img_s2r), True)
 		self.loss_G_Rfeat = self.criterionGAN(self.netD_Rfeat(self.s2r_dehazing_feat), True) * lambda_gan_feat
-		self.loss_cycle_S = self.criterionCycle(self.s_rec_img, self.syn_haze_img) * lambda_S
-		self.loss_idt_S = self.criterionIdt(self.idt_S, self.syn_haze_img) * lambda_S * lambda_idt
+		#self.loss_cycle_S = self.criterionCycle(self.s_rec_img, self.syn_haze_img) * lambda_S
+		#self.loss_idt_S = self.criterionIdt(self.idt_S, self.syn_haze_img) * lambda_S * lambda_idt
 		size = len(self.out_s)
 		self.loss_S_Dehazing = 0.0
 		clear_imgs = task.scale_pyramid(self.clear_img, size - 1)
@@ -285,23 +288,23 @@ class DAnetmodel(BaseModel):
 		self.loss_S2R_Dehazing = 0.0
 		for (s2r_dehazing_img, clear_img) in zip(self.out_r[1:], clear_imgs):
 			self.loss_S2R_Dehazing += self.criterionDehazing(s2r_dehazing_img, clear_img) * lambda_Dehazing
-		self.loss = self.loss_G_S2R + self.loss_G_Rfeat + self.loss_cycle_S + self.loss_idt_S + self.loss_S_Dehazing + self.loss_S2R_Dehazing
+		self.loss = self.loss_G_Rfeat + self.loss_S_Dehazing + self.loss_S2R_Dehazing
 		self.loss.backward()
 
 		# ============================= real =============================
-		self.img_r2s = self.netR2S(self.real_haze_img, self.real_depth, True)
-		self.idt_R = self.netS2R(self.real_haze_img, self.real_depth, True)
-		self.r_rec_img = self.netS2R(self.img_r2s, self.real_depth, True)
+		self.img_r2s = self.S_decoder(Rcon, Fsty)
+		#self.idt_R = self.netS2R(self.real_haze_img, self.real_depth, True)
+		#self.r_rec_img = self.netS2R(self.img_r2s, self.real_depth, True)
 		self.out_s = self.netS_Dehazing(self.img_r2s)
 		self.out_r = self.netR_Dehazing(self.real_haze_img)
 		self.r_dehazing_feat = self.out_r[0]
 		self.r2s_dehazing_feat = self.out_s[0]
 		self.r_dehazing_img = self.out_r[-1]
 		self.r2s_dehazing_img = self.out_s[-1]
-		self.loss_G_R2S = self.criterionGAN(self.netD_S(self.img_r2s), True)
+		#self.loss_G_R2S = self.criterionGAN(self.netD_S(self.img_r2s), True)
 		self.loss_G_Sfeat = self.criterionGAN(self.netD_Sfeat(self.r2s_dehazing_feat), True) * lambda_gan_feat
-		self.loss_cycle_R = self.criterionCycle(self.r_rec_img, self.real_haze_img) * lambda_R
-		self.loss_idt_R= self.criterionIdt(self.idt_R, self.real_haze_img) * lambda_R * lambda_idt
+		#self.loss_cycle_R = self.criterionCycle(self.r_rec_img, self.real_haze_img) * lambda_R
+		#self.loss_idt_R= self.criterionIdt(self.idt_R, self.real_haze_img) * lambda_R * lambda_idt
 
 		# TV LOSS
 
@@ -319,28 +322,30 @@ class DAnetmodel(BaseModel):
 		for (out_s1, out_r2) in zip(self.out_s, self.out_r):
 			self.loss_Dehazing_Con += self.criterionCons(out_s1, out_r2) * lambda_Dehazing_Con
 
-		self.loss_G = self.loss_G_R2S + self.loss_G_Sfeat + self.loss_cycle_R + self.loss_idt_R + self.loss_R2S_Dehazing_TV \
+		self.loss_G =  + self.loss_G_Sfeat  + self.loss_R2S_Dehazing_TV \
 					  + self.loss_R_Dehazing_TV + self.loss_R2S_Dehazing_DC + self.loss_R_Dehazing_DC + self.loss_Dehazing_Con
 		self.loss_G.backward()
 		self.real_dehazing_img = (self.r_dehazing_img + self.r2s_dehazing_img) / 2.0
 		self.syn_dehazing_img = (self.s_dehazing_img + self.s2r_dehazing_img) / 2.0
-
-
+		self.trainer.dis_update(self.real_haze_img, self.syn_haze_img, get_config("/home/intern/ss_sasuke/Modified-MUNIT/DA_net/MUNIT/uw_S2R.yaml"))
+		self.trainer.gen_update(self.real_haze_img, self.syn_haze_img, get_config("/home/intern/ss_sasuke/Modified-MUNIT/DA_net/MUNIT/uw_S2R.yaml"))
+		self.trainer.save("/home/intern/ss_sasuke/Modified-MUNIT/DA_net/checkpoints", 0)
 	def optimize_parameters(self):
 
 		self.forward()
-		self.set_requires_grad([self.netD_S, self.netD_R, self.netD_Sfeat, self.netD_Rfeat], False)
-		self.optimizer_G_trans.zero_grad()
+		self.set_requires_grad([self.netD_Sfeat, self.netD_Rfeat], False)
+		#self.optimizer_G_trans.zero_grad()
 		self.optimizer_G_task.zero_grad()
 		self.backward_G()
-		self.optimizer_G_trans.step()
+		#self.optimizer_G_trans.step()
 		self.optimizer_G_task.step()
 
-		self.set_requires_grad([self.netD_S, self.netD_R, self.netD_Sfeat, self.netD_Rfeat], True)
+		self.set_requires_grad([self.netD_Sfeat, self.netD_Rfeat], True)
 		self.optimizer_D.zero_grad()
-		self.backward_D_S()
-		self.backward_D_R()
+		#self.backward_D_S()
+		#self.backward_D_R()
 		self.backward_D_Sfeat()
 		self.backward_D_Rfeat()
 		self.optimizer_D.step()
+
 

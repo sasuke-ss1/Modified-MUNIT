@@ -14,9 +14,9 @@ class AlignedDataset(BaseDataset):
         self.opt = opt
         self.root = opt.dataroot
 
-        self.dir_A = ""#os.path.join(opt.dataroot, opt.phase)
-        self.dir_B = ""
-        self.dir_C = os.path.join(opt.dataroot, 'unlabeled')
+        self.dir_A = "/home/neham/uw_datasets/UWCNN_NYU/type1_data/underwater_type_1/"#os.path.join(opt.dataroot, opt.phase)
+        self.dir_B = "/home/neham/uw_datasets/UWCNN_NYU/type1_data/gt_type_type_1/"
+        self.dir_C = "/home/neham/uw_datasets/trainA/"
         # self.dir_C = os.path.join(opt.dataroot, 'verify_haze_img')
         # self.dir_C = os.path.join(opt.dataroot, 'HazeRD_dataset', 'hazy')
         # self.dir_C = os.path.join(opt.dataroot, 'Dense_Haze_NTIRE19', 'hazy')
@@ -35,7 +35,7 @@ class AlignedDataset(BaseDataset):
         self.transformPIL = transforms.ToPILImage()
         transform_list1 = [transforms.ToTensor()]
         transform_list2 = [transforms.Normalize((0.5, 0.5, 0.5),
-                                               (0.5, 0.5, 0.5))]
+                                               (0.5, 0.5, 0.5)), transforms.RandomCrop((256, 256))]
 
         self.transform1 = transforms.Compose(transform_list1)
         self.transform2 = transforms.Compose(transform_list2)
@@ -47,12 +47,12 @@ class AlignedDataset(BaseDataset):
             B_path = self.B_paths[index]
             #D_path = self.D_paths[index]
             # and C is the unlabel hazy image
-            C_ind = random.randint(0, int((len(self.AB_paths)-1)/6))
-            C_path = self.C_paths[C_ind]
+            C_path = self.C_paths[index]
             #E_path = self.E_paths[C_ind]
             # C_path = self.C_paths[random.randint(0, len(self.AB_paths)-2200)]
             A = Image.open(A_path).convert('RGB')
             B = Image.open(B_path).convert('RGB')
+            C = Image.open(C_path).convert("RGB")
             C_w = C.width
             C_h = C.height
             ## resize the real image without label
@@ -104,15 +104,15 @@ class AlignedDataset(BaseDataset):
             A = self.transform2(A)
             B = self.transform2(B)
             C= self.transform2(C)
-            D = self.transform2(D)
-            E = self.transform2(E)
+            #D = self.transform2(D)
+            #E = self.transform2(E)
 
             if random.random()<0.5:
                 noise = torch.randn(3, self.opt.fineSize, self.opt.fineSize) / 100
                 #A = A + noise
 
             return {'A': A, 'B': B, 'C': C,'C_paths': C_path,
-                    'A_paths': AB_path, 'B_paths': AB_path}
+                    'A_paths': A_path, 'B_paths': B_path}
 
         elif self.opt.phase == 'test':
             if self.opt.test_type == 'syn':
@@ -168,10 +168,10 @@ class AlignedDataset(BaseDataset):
     def __len__(self):
 
         if self.opt.phase == 'train':
-            return len(self.AB_paths)
+            return min(len(self.A_paths), len(self.B_paths))
         elif self.opt.phase == 'test':
             if self.opt.test_type == 'syn':
-                return len(self.AB_paths)
+                return min(len(self.A_paths), len(self.B_paths))
             elif self.opt.test_type == 'real':
                 return len(self.C_paths)
 
