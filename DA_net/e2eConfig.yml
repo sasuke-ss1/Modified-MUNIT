@@ -1,0 +1,10 @@
+syn_path:
+real_path:
+lambda_Dehazing: 
+lambda_Dehazing_Con:
+lambda_R:
+lambda_S:
+lambda_TV:
+lambda_DC:
+lambda_GAN:
+patch_size:

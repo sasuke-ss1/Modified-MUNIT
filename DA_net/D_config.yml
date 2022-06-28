@@ -1,0 +1,9 @@
+input_nc:
+nf:
+which_model_netD:
+n_layers_D: 3
+norm: 'batch'
+use_sigmoid: False
+gpu_ids: 0
+use_parallel: True
+patch_size: 

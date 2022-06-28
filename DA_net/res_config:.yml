@@ -1,0 +1,9 @@
+input_nc: 
+output_nc:
+nf: 
+layers:
+norm:
+activation:
+drop_rate:
+add_noise:
+gpu_ids: 0
