@@ -10,6 +10,7 @@ class S_recon(nn.Module):
     def __init__(self, m_config, res_config, d_config = None, train = True):
         super().__init__()
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        m_config = get_config(m_config)
         munit = networks.get_MUNIT(m_config)
         res_config = get_config(res_config)
         d_config = get_config(d_config)

@@ -259,14 +259,21 @@ def get_MUNIT(config):
     return MUNIT_Trainer(config)
 
 def get_resnet(config):
-    input_nc = config["input_nc"];output_nc = config["output_nc"];nf = config["nf"];layers = config["layers"];norm = config["norm"]
-    activation = config["activation"];drop_rate = config["drop_rate"], add_noise = config["add_noise"], gpu_ids=["gpu_ids"]
+    input_nc = config["input_nc"]
+    output_nc = config["output_nc"]
+    nf = config["nf"]
+    layers = config["layers"]
+    norm = config["norm"]
+    activation = config["activation"]
+    drop_rate = config["drop_rate"]
+    add_noise = config["add_noise"]
+    gpu_ids=config["gpu_ids"]
     return ResNet(input_nc, output_nc, nf, layers, norm, activation, drop_rate, add_noise, gpu_ids).apply(weights_init)
 
 def get_D(config):
     netD = None
-    use_gpu = len(gpu_ids) > 0
-    norm_layer = get_norm_layer(norm_type=norm)
+    use_gpu = len(config["gpu_ids"])
+    norm_layer = get_norm_layer(norm_type=config["norm"])
     input_nc = config["input_nc"]
     ndf = config["ndf"]
     which_model_netD = config["which_model_netD"]

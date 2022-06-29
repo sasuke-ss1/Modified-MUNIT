@@ -1,9 +1,13 @@
-input_nc: 
-output_nc:
-nf: 
-layers:
-norm:
-activation:
-drop_rate:
-add_noise:
-gpu_ids: 0
+input_nc: 3
+output_nc: 3
+nf: 64
+layers: 6
+norm: "batch"
+activation: "PReLU"
+drop_rate: 0
+add_noise: False
+gpu_ids: [0]
+lambda_recon: 10
+lambda_TV: 0.01
+lambda_DC: 0.01
+lambda_GAN: 1
