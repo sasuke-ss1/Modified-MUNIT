@@ -72,7 +72,7 @@ class R_recon(nn.Module):
         self.loss_D = self.backward_D_basic(self.netD, self.clear_img, self.s2r_recon_img)
     
     def backward_G(self):
-        self.loss_R_recon = self.ReconLoss(self.s2r_recon_img, self.clear_img)
+        self.loss_R_recon = self.ReconLoss(self.s2r_recon_img, self.clear_img)*self.lambda_recon
 
         self.loss_s2r_recon_TV = self.TVLoss(self.R_recon_img)*self.lambda_TV
         self.loss_s2r_recon_DC = DCLoss((self.R_recon_img + 1)/2, self.patch_size)*self.lambda_DC

@@ -4,6 +4,7 @@ from torch.utils.data import DataLoader
 from torchvision import transforms
 from DA_net.data import ImageFolder
 import yaml
+from torchvision.utils import make_grid, save_image
 
 def Folder_data(input_folder, batch_size, train, new_size=None,height=256, width=256, num_workers=4, crop=True):
     transform_list = [transforms.ToTensor(),
@@ -22,6 +23,8 @@ def get_config(config):
         return yaml.safe_load(stream)
 
 
-def save_images(im1, im2, im3, im4, im5):
-    pass
+def save_images(im1, im2, im3, im4, im5, iter):
+    grid = make_grid([im1.cpu()[0], im2.cpu()[0], im3.cpu()[0], im4.cpu()[0], im5.cpu()[0]])
+    save_image(grid, f"./checkpoints/S_images/{iter}.png")
+
 

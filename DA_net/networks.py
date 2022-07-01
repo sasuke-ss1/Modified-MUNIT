@@ -268,7 +268,12 @@ def get_resnet(config):
     drop_rate = config["drop_rate"]
     add_noise = config["add_noise"]
     gpu_ids=config["gpu_ids"]
-    return ResNet(input_nc, output_nc, nf, layers, norm, activation, drop_rate, add_noise, gpu_ids).apply(weights_init)
+    use_gpu = len(gpu_ids)
+    netG = ResNet(input_nc, output_nc, nf, layers, norm, activation, drop_rate, add_noise, gpu_ids)
+    if use_gpu:
+        netG.cuda(gpu_ids[0])
+    netG.apply(weights_init)
+    return netG
 
 def get_D(config):
     netD = None

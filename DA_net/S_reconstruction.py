@@ -52,6 +52,7 @@ class S_recon(nn.Module):
             self.img_r2s = self.S_decoder(Rcon, Fsty).detach()
             self.s_recon_img = self.S_recon(self.syn_img)[-1] ## -1 is sus
             self.r2s_recon_img = self.S_recon(self.img_r2s)[-1] ## -1 is sus
+        
 
 
         else:
@@ -73,7 +74,7 @@ class S_recon(nn.Module):
         self.loss_D = self.backward_D_basic(self.netD, self.clear_img, self.r2s_recon_img)
     
     def backward_G(self):
-        self.loss_S_recon = self.ReconLoss(self.s_recon_img, self.clear_img)
+        self.loss_S_recon = self.ReconLoss(self.s_recon_img, self.clear_img)*self.lambda_recon
 
         self.loss_r2s_recon_TV = self.TVLoss(self.r2s_recon_img)*self.lambda_TV
         self.loss_r2s_recon_DC = DCLoss((self.r2s_recon_img + 1)/2, self.patch_size)*self.lambda_DC
@@ -84,15 +85,19 @@ class S_recon(nn.Module):
     def optimize(self, syn_img, real_img, clear_img):
         self.forward(syn_img, real_img, clear_img)
         # G
+        self.set_grad_false(self.netD)
         self.G_optim.zero_grad()
         self.backward_G()
         self.G_optim.step()
         # D
+        self.set_grad_false(self.netD, True)
         self.D_optim.zero_grad()
         self.backward_D()
         self.D_optim.step()
-        
-
+    
+    def set_grad_false(self, net, grad = False):
+        for param in net.parameters():
+            param.requires_grad = grad
 
 
 
