@@ -4,21 +4,24 @@ import DA_net.S_reconstruction as Srecon
 import DA_net.R_reconstruction as Rrecon
 import DA_net.End2End as End2End
 import torch
-
+log = open("./checkpoints/S_log.txt", 'a')
 iterations = 0
 def train(opt):
-    fake = utils.Folder_data(opt.fake, opt.batch_size, train=True)
-    clear = utils.Folder_data(opt.clear, opt.batch_size, train=True)
+    fake = utils.Folder_data(opt.fake, opt.batch_size, train=False)
+    clear = utils.Folder_data(opt.clear, opt.batch_size, train=False)
     real = utils.Folder_data(opt.real, opt.batch_size, train=True)
+    iterations = 0
     while True:
         for it, (fake_img, real_img, clear_img) in enumerate(zip(fake, real, clear)):
-            model = Srecon.S_recon(opt.m_config, opt.res_config, opt.d_config)
+            model = Srecon.S_recon(opt.m_config, opt.res_config, opt.d_config).cuda()
             model.optimize(fake_img, real_img, clear_img)
             iterations += 1
-            if(iterations % opt.save_image):
-                #utils.save_images(model.r2s_recon_img, model.s_recon_img, fake_img, real_img, clear_img)
-                print(f"{iterations}  G: {model.netLoss}   D:{model.loss_D}")
-                torch.save(model.state_dict(), f"./chekpoints/{model}.pth")
+            if(not iterations % opt.save_image):
+                utils.save_images(model.r2s_recon_img.detach(), model.s_recon_img.detach(), fake_img.detach(), real_img.detach(), clear_img.detach(), iterations)
+                log.write(f"{iterations}  G: {model.netLoss}   D:{model.loss_D}")
+                
+                #print(model.s_recon_img.shape, model.r2s_recon_img.shape )
+                torch.save(model.state_dict(), f"./checkpoints/S_weight/Srecon_{iterations}.pth")
             if(iterations >= opt.max_iter):
                 return
                 

@@ -17,7 +17,7 @@ def Folder_data(input_folder, batch_size, train, new_size=None,height=256, width
     dataset = ImageFolder(input_folder, transform=transform)
     loader = DataLoader(dataset=dataset, batch_size=batch_size, shuffle=train, drop_last=True, num_workers=num_workers)
     return loader
-
+    
 def get_config(config):
     with open(config, 'r') as stream:
         return yaml.safe_load(stream)
