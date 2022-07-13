@@ -235,6 +235,98 @@ class ResNet(nn.Module):
         result.append(output)
         return result
 
+        
+class _UNetGenerator(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        
+        self.gpu_ids = gpu_ids
+        self.layers = layers
+        self.weight = weight
+        norm_layer = get_norm_layer(norm_type=norm)
+        nonlinearity = get_nonlinearity_layer(activation_type=activation)
+
+        if type(norm_layer) == functools.partial:
+            use_bias = norm_layer.func == nn.InstanceNorm2d
+        else:
+            use_bias = norm_layer == nn.InstanceNorm2d
+
+        # encoder part
+        self.pool = nn.AvgPool2d(kernel_size=2, stride=2)
+        self.conv1 = nn.Sequential(
+            nn.ReflectionPad2d(3),
+            nn.Conv2d(input_nc, ngf, kernel_size=7, padding=0, bias=use_bias),
+            norm_layer(ngf),
+            nonlinearity
+        )
+        self.conv2 = _EncoderBlock(ngf, ngf*2, ngf*2, norm_layer, nonlinearity, use_bias)
+        self.conv3 = _EncoderBlock(ngf*2, ngf*4, ngf*4, norm_layer, nonlinearity, use_bias)
+        self.conv4 = _EncoderBlock(ngf*4, ngf*8, ngf*8, norm_layer, nonlinearity, use_bias)
+
+        for i in range(layers-4):
+            conv = _EncoderBlock(ngf*8, ngf*8, ngf*8, norm_layer, nonlinearity, use_bias)
+            setattr(self, 'down'+str(i), conv.model)
+
+        center=[]
+        for i in range(7-layers):
+            center +=[
+                _InceptionBlock(ngf*8, ngf*8, norm_layer, nonlinearity, 7-layers, drop_rate, use_bias)
+            ]
+
+        center += [
+        _DecoderUpBlock(ngf*8, ngf*8, ngf*4, norm_layer, nonlinearity, use_bias)
+        ]
+        if add_noise:
+            center += [GaussianNoiseLayer()]
+        self.center = nn.Sequential(*center)
+
+        for i in range(layers-4):
+            upconv = _DecoderUpBlock(ngf*(8+4), ngf*8, ngf*4, norm_layer, nonlinearity, use_bias)
+            setattr(self, 'up' + str(i), upconv.model)
+
+        self.deconv4 = _DecoderUpBlock(ngf*(4+4), ngf*8, ngf*2, norm_layer, nonlinearity, use_bias)
+        self.deconv3 = _DecoderUpBlock(ngf*(2+2)+output_nc, ngf*4, ngf, norm_layer, nonlinearity, use_bias)
+        self.deconv2 = _DecoderUpBlock(ngf*(1+1)+output_nc, ngf*2, int(ngf/2), norm_layer, nonlinearity, use_bias)
+
+        self.output4 = _OutputBlock(ngf*(4+4), output_nc, 3, use_bias)
+        self.output3 = _OutputBlock(ngf*(2+2)+output_nc, output_nc, 3, use_bias)
+        self.output2 = _OutputBlock(ngf*(1+1)+output_nc, output_nc, 3, use_bias)
+        self.output1 = _OutputBlock(int(ngf/2)+output_nc, output_nc, 7, use_bias)
+
+        self.upsample = nn.Upsample(scale_factor=2, mode='nearest')
+
+    def forward(self, input):
+        conv1 = self.pool(self.conv1(input))
+        conv2 = self.pool(self.conv2.forward(conv1))
+        conv3 = self.pool(self.conv3.forward(conv2))
+        center_in = self.pool(self.conv4.forward(conv3))
+
+        middle = [center_in]
+        for i in range(self.layers-4):
+            model = getattr(self, 'down'+str(i))
+            center_in = self.pool(model.forward(center_in))
+            middle.append(center_in)
+        center_out = self.center.forward(center_in)
+        result = [center_in]
+
+        for i in range(self.layers-4):
+            model = getattr(self, 'up'+str(i))
+            center_out = model.forward(torch.cat([center_out, middle[self.layers-5-i]], 1))
+
+        ans = torch.cat([center_out, conv3 * self.weight],1)
+        deconv4 = self.deconv4.forward(torch.cat([center_out, conv3 * self.weight], 1))
+        output4 = self.output4.forward(torch.cat([center_out, conv3 * self.weight], 1))
+        result.append(output4)
+        deconv3 = self.deconv3.forward(torch.cat([deconv4, conv2 * self.weight * 0.5, self.upsample(output4)], 1))
+        output3 = self.output3.forward(torch.cat([deconv4, conv2 * self.weight * 0.5, self.upsample(output4)], 1))
+        result.append(output3)
+        deconv2 = self.deconv2.forward(torch.cat([deconv3, conv1 * self.weight * 0.1, self.upsample(output3)], 1))
+        output2 = self.output2.forward(torch.cat([deconv3, conv1 * self.weight * 0.1, self.upsample(output3)], 1))
+        result.append(output2)
+        output1 = self.output1.forward(torch.cat([deconv2, self.upsample(output2)], 1))
+        result.append(output1)
+
+        return result
 def define_D(input_nc, ndf, which_model_netD,
              n_layers_D=3, norm='batch', use_sigmoid=False, gpu_ids=[], use_parallel = True):
     netD = None

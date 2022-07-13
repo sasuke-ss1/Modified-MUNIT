@@ -31,28 +31,27 @@ class End2End(nn.Module):
             self.lambda_GAN = e2eConfig["lambda_GAN"]
             self.patch_size = e2eConfig["patch_size"]
             d_config["use_sigmoid"] = False
-            self.netD_S = self.S_recon.netD()
-            self.netD_R = self.R_recon.netD()
             state_dict = torch.load(m_config["checkpoint"])
-            munit.gen_a.load_state_dict(state_dict["a"])
-            munit.gen_b.load_state_dict(state_dict['b'])
-            munit.cuda()
-            munit.eval()
-            self.S_encoder = munit.gen_b.encode;self.S_decoder = munit.gen_b.decode
-            self.R_encoder = munit.gen_a.encode;self.R_decoder = munit.gen_a.decode
+            self.munit.gen_uw.load_state_dict(state_dict["a"])
+            self.munit.gen_sw.load_state_dict(state_dict['b'])
+            self.munit.cuda()
+            self.S_encoder = self.munit.gen_sw.encode;self.S_decoder = self.munit.gen_sw.decode
+            self.R_encoder = self.munit.gen_uw.encode;self.R_decoder = self.munit.gen_uw.decode
             self.S_recon.load_state_dict(torch.load(e2eConfig["syn_path"]))
             self.R_recon.load_state_dict(torch.load(e2eConfig["real_path"]))
-
+            self.netD_S = self.S_recon.netD()
+            self.netD_R = self.R_recon.netD()
             self.L1loss = nn.L1Loss()
             self.Cons = nn.L1Loss()
             self.GanLoss = GANLoss(use_ls = True).to(self.device) #sus
             self.ReconLoss = nn.MSELoss()
             self.TVLoss = L1_TVLoss_Charbonnier()
 
-            self.G_optim = torch.optim.Adam(list(self.S_recon.parameters())+ list(self.R_recon.parameters()),lr = res_config["lr"], betas = (0.9, 0.999))
+            self.G_optim = torch.optim.Adam(list(self.S_recon.parameters())+ list(self.R_recon.parameters()),lr = res_config["lr"], betas = (0.95, 0.999))
             self.D_optim = torch.optim.Adam(
-                list(self.netD_S.parameter())+
-                list(self.netD_R.parameters())
+                list(self.netD_S.parameters())+
+                list(self.netD_R.parameters()), betas=(0.5, 0.9)
+
             )
         
     def forward(self, syn_img, real_img, clear_img):
@@ -88,8 +87,11 @@ class End2End(nn.Module):
         self.loss_D = self.backward_D_basic(self.netD, self.clear_img, self.s2r_recon_img)
 
     def backward_G(self):
-        self.loss_S_recon = self.ReconLoss(self.s_recon_img, self.clear_img)
+        ## Recon losses
+        self.loss_S_recon = self.ReconLoss(self.s_recon_img, self.clear_img)*self.lambda_Dehazing
+        self.loss_R_recon = self.ReconLoss(self.s2r_recon_img, self.clear_img)*self.lambda_Dehazing
 
+        ## TV and DC loss
         self.loss_r2s_recon_TV = self.TVLoss(self.r2s_recon_img)*self.lambda_TV
         self.loss_r2s_recon_DC = DCLoss((self.r2s_recon_img + 1)/2, self.patch_size)*self.lambda_DC
         self.loss_s2r_recon_TV = self.TVLoss(self.R_recon_img)*self.lambda_TV
@@ -97,6 +99,11 @@ class End2End(nn.Module):
 
         self.loss_G_S = self.GanLoss(self.S_recon.netD(self.r2s_recon_img), True)*self.lambda_GAN
         self.loss_G_R = self.GanLoss(self.R_recon.netD(self.R_recon_img), True)*self.lambda_GAN
+        ## Cosistancy loss
+        self.loss_consistancy = self.Cons(self.r2s_recon_img, self.R_recon_img) * self.lambda_Dehazing_Con
+
+        self.loss_G = self.loss_G_S + self.loss_G_R + self.loss_R_recon + self.loss_S_recon + self.loss_r2s_recon_DC + \
+            self.loss_r2s_recon_TV + self.loss_s2r_recon_DC + self.loss_s2r_recon_TV  +self.Cons
 
     def optimize(self, syn_img, real_img, clear_img):
         self.forward(syn_img, real_img, clear_img)

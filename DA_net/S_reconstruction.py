@@ -4,7 +4,8 @@ import DA_net.networks as networks
 from DA_net.losses import GANLoss
 from DA_net.TVLoss1 import L1_TVLoss_Charbonnier
 from DA_net.ECLoss import DCLoss
-from DA_net.utils import get_config
+from DA_net.utils import get_config, SSIM, VGGPerceptualLoss, save_images
+
 
 class S_recon(nn.Module):
     def __init__(self, m_config, res_config, d_config = None, train = True):
@@ -14,18 +15,18 @@ class S_recon(nn.Module):
         munit = networks.get_MUNIT(m_config)
         res_config = get_config(res_config)
         d_config = get_config(d_config)
-        self.S_recon = networks.get_resnet(res_config)
+        self.S_recon = networks.get_resnet(res_config).to(self.device)
         self.train = train
         if self.train:
             d_config["use_sigmoid"] = False
             self.netD = networks.get_D(d_config)
             state_dict = torch.load(m_config["checkpoint"])
-            munit.gen_a.load_state_dict(state_dict["a"])
-            munit.gen_b.load_state_dict(state_dict['b'])
+            munit.gen_uw.load_state_dict(state_dict["a"])
+            munit.gen_sw.load_state_dict(state_dict['b'])
             munit.cuda()
             munit.eval()
-            self.S_encoder = munit.gen_b.encode;self.S_decoder = munit.gen_b.decode
-            self.R_encoder = munit.gen_a.encode;self.R_decoder = munit.gen_a.decode
+            self.S_encoder = munit.gen_sw.encode;self.S_decoder = munit.gen_sw.decode
+            self.R_encoder = munit.gen_uw.encode;self.R_decoder = munit.gen_uw.decode
 
             self.lambda_recon = res_config["lambda_recon"]
             self.lambda_TV = res_config["lambda_TV"]
@@ -33,6 +34,8 @@ class S_recon(nn.Module):
             self.lambda_GAN = res_config["lambda_GAN"]
             self.patch_size = d_config["patch_size"]
             self.GanLoss = GANLoss(use_ls = True).to(self.device)
+            self.ssim = SSIM().to(self.device)
+            self.perceptual = VGGPerceptualLoss(resize = False).to(self.device)
             self.ReconLoss = nn.MSELoss()
             self.TVLoss = L1_TVLoss_Charbonnier()
             self.G_optim = torch.optim.Adam(self.S_recon.parameters(), lr = res_config["lr"], betas = (0.9, 0.999))
@@ -71,15 +74,16 @@ class S_recon(nn.Module):
         return loss_D    
 
     def backward_D(self):
-        self.loss_D = self.backward_D_basic(self.netD, self.clear_img, self.r2s_recon_img)
+        self.loss_D = self.backward_D_basic(self.netD, self.clear_img, self.s_recon_img)
     
     def backward_G(self):
         self.loss_S_recon = self.ReconLoss(self.s_recon_img, self.clear_img)*self.lambda_recon
-
+        self.perceptual_loss = self.perceptual(self.s_recon_img, self.clear_img)
         self.loss_r2s_recon_TV = self.TVLoss(self.r2s_recon_img)*self.lambda_TV
         self.loss_r2s_recon_DC = DCLoss((self.r2s_recon_img + 1)/2, self.patch_size)*self.lambda_DC
         self.loss_G = self.GanLoss(self.netD(self.r2s_recon_img), True)*self.lambda_GAN
-        self.netLoss = self.loss_G + self.loss_r2s_recon_DC + self.loss_r2s_recon_TV + self.loss_S_recon
+        self.ssim_loss = self.ssim(self.s_recon_img, self.clear_img)
+        self.netLoss = self.loss_G + self.loss_S_recon + self.ssim_loss * 2 +self.perceptual_loss*0.1+ self.loss_r2s_recon_DC + self.loss_r2s_recon_TV
         self.netLoss.backward()
 
     def optimize(self, syn_img, real_img, clear_img):
@@ -98,6 +102,9 @@ class S_recon(nn.Module):
     def set_grad_false(self, net, grad = False):
         for param in net.parameters():
             param.requires_grad = grad
+    def save(self, fake_img, real_img, clear_img, path):
+        save_images([self.s_recon_img.detach().cpu(),self.img_r2s.detach().cpu(), self.r2s_recon_img.detach().cpu(), fake_img.detach().cpu(), real_img.detach().cpu(), clear_img.detach().cpu()], path)
+
 
 
 

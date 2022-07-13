@@ -1,7 +1,7 @@
 input_nc: 3
 output_nc: 3
 nf: 64
-layers: 6
+layers: 9
 norm: "batch"
 activation: "PReLU"
 drop_rate: 0
@@ -11,5 +11,5 @@ lambda_recon: 10
 lambda_TV: 0.01
 lambda_DC: 0.01
 lambda_GAN: 0
-lr: 0.00001
+lr: 0.0001
 checkpoint:
